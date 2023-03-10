@@ -1,0 +1,317 @@
+---
+title: "Diversity trials, 2021 & 2022"
+author: "Luis Fernando Delgado Munoz"
+format: html
+code-fold: true
+code-tools: true
+editor: visual
+---
+
+# Introduction
+
+This document is showing the data analysis of four diversity trials in Colombia.
+
+The trials were managed by CIAT and the locations were:
+
+-   Palmira, Valle del Cauca - Colombia
+-   Momil, Cordoba - Colombia
+
+## Load the libraries
+
+```{r}
+rm(list = ls())
+library(pacman)
+pacman::p_load(tidyverse, fauxnaif, readxl, yarrr, dplyr, knitr, rmarkdown, statgenSTA, statgenGxE, openxlsx, QBMS, magrittr, agriutilities, asreml, SpATS)
+source("https://raw.githubusercontent.com/Cassava2050/PPD/main/utilities_tidy.R")
+```
+
+## Load the files to check
+
+```{r}
+local_file <- "yes" # "no"
+if (local_file == "yes") {
+  folder <- here::here("data//")  #"D:\\OneDrive - CGIAR\\Data Analysis\\HungLoc_2022\\data\\"
+  file <- "phenotype.csv"
+  skip_col <- 3 # double check the number of col skipped
+  trial_interest = "DVGN6"
+  year_interest <- 2022
+}
+# 1) load the data
+sel_data <- read_cassavabase(phenotypeFile = paste0(folder, file))
+```
+
+## Change columns into standar names
+
+```{r}
+# ---- Change columns into standar names ----
+sel_data_kp <- change_colname(sel_data, NA)
+```
+
+## change the column class
+
+```{r}
+obs_col <- c(
+  names(sel_data_kp)[str_detect(names(sel_data_kp), "obs_")],
+  "use_rep_number", "blockNumber",
+  "use_plot_number", "use_plot_width",
+  "use_plot_length"
+)
+sel_data_kp %<>%
+  mutate(across(all_of(obs_col), as.numeric))
+
+names(sel_data_kp) = gsub("-", "_", names(sel_data_kp))
+```
+
+## Duplications in row and cols
+
+```{r}
+duplicated_plot <- row_col_dup(sel_data_kp)
+```
+
+### Fixing som errors
+
+Below I'm going to add checks to 202101DVGN6_ciat trial
+
+```{r}
+checks_ciat <- sel_data_kp %>%
+  filter(use_trial_name == "202101DVGN6_ciat", use_accession_name %in% c("COL2215", "CG1141-1", "CM4919-1", "SM2775-4", "SM2828-28", "SMB2446-2", "TAI8")) %>%
+  select(use_plot_name) %>% pull() %>% unique()
+
+sel_data_kp <- sel_data_kp %>% 
+  mutate(use_check_test = case_when( 
+            use_plot_name == "202101DVGN6_ciat_rep1_CG1141-1_78" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep1_CM4919-1_56" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep1_COL2215_57" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep1_SM2775-4_38" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep1_SMB2446-2_115" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep1_TAI8_95" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep2_CG1141-1_153" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep2_CM4919-1_258" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep2_COL2215_141" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep2_SM2775-4_145" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep2_SMB2446-2_188" ~ "check",
+            use_plot_name == "202101DVGN6_ciat_rep2_TAI8_185" ~ "check",
+           TRUE ~ use_check_test)) 
+```
+
+## Plot trial layout
+
+```{r, fig.height=8, fig.width=8}
+trial_layout(sel_data_kp)
+```
+
+## Check the clone name
+
+```{r}
+cloneName_new_old <- check_clone_name(
+  clone_list = sel_data_kp$use_accession_name,
+  new_names = NA,
+  add_check = NULL
+)
+
+trial_standard <- sel_data_kp %>%
+  left_join(cloneName_new_old,
+    by = c("use_accession_name" = "accession_name_ori")
+  ) %>%
+  select(-use_accession_name) %>%
+  rename(use_accession_name = use_accession_name.y)
+```
+
+## Add GIS data
+
+```{r}
+trial_standard <- add_GIS(trial_standard)
+```
+
+## Location Map
+
+```{r fig.height=4, fig.width=4}
+td <- createTD(trial_standard, genotype = 'use_accession_name', 
+               trial = 'use_trial_name', loc = 'use_location_short', 
+               trLat = "use_latitude", trLong = "use_longitude",
+               trDesign = 'res.rowcol'
+)
+
+
+plot(td, plotType = "map",
+     minLatRange = 12, minLongRange = 12)
+```
+
+```{r}
+accession_rep_ct <- trial_standard %>%
+  count(use_trial_name, use_accession_name, use_rep_number)  %>%
+  arrange(use_trial_name) %>%
+  filter(n>1)
+accession_rep_ct %>% filter(n == 2)
+```
+
+## Genotypes per trial
+
+```{r}
+trial_standard %>% group_by(use_trial_name, use_harvest_date, use_plant_date, use_location) %>% 
+  summarise(n_gen = n_distinct(use_accession_name)) %>% 
+  write.table("clipboard", sep="\t", col.names = T, row.names = F)
+```
+
+## plot plant number
+
+
+```{r}
+plants_plot <- trial_standard %>%
+  group_by(use_trial_name) %>%
+  count(obs_planted_number_plot) 
+
+plants_plot
+```
+
+## Frequency harvest plant number
+
+```{r}
+plants_harvested <- trial_standard %>%
+  group_by(use_trial_name) %>%
+  count(obs_harvest_number) %>% arrange(desc(obs_harvest_number))
+
+plants_harvested %>% 
+  ggplot(aes(x = factor(obs_harvest_number), y = n, fill = factor(obs_harvest_number))) +
+  geom_col() +
+  theme_xiaofei() +
+  labs(x = "Harvest_plant_number", y = "Freq", fill = "Harvest_plant_number") +
+  facet_wrap(~ use_trial_name)
+```
+
+
+## Area per plant
+
+```{r}
+area_freq <- table((trial_standard$use_plot_width*trial_standard$use_plot_length)/4) %>% 
+  as.data.frame()
+colnames(area_freq) = c("area", "freq")
+area_freq
+```
+
+
+## Compute germination, yield, yield_starch
+
+```{r}
+trial_standard_new <- trial_standard %>%
+  mutate(obs_harvest_number_plan =
+           case_when(str_detect(use_trial_name, "202101") &  str_detect(use_trial_name , "DVGN6") ~ 6,
+                     str_detect(use_trial_name, "202109") &  str_detect(use_trial_name , "DVGN6") ~ 6, 
+                     str_detect(use_trial_name, "202206") &  str_detect(use_trial_name , "DVGN6") ~ 4, 
+                     str_detect(use_trial_name, "202232") &  str_detect(use_trial_name , "DVGN6") ~ 6),
+         obs_germination_perc = obs_germinated_number_plot/obs_planted_number_plot * 100,
+         # 2) calculate area per plant
+         area_plant = (use_plot_length*use_plot_width)/obs_planted_number_plot,
+         # 3) calculate the yield_v4 obs_planted_number_plot
+         obs_yield_ha_v2 = (((obs_root_weight_plot*10000)/(area_plant*obs_harvest_number_plan))/1000),
+         obs_yield_ha = obs_DM_gravity * obs_yield_ha_v2 / 100)
+```
+
+## Plot the yield_v2 vs yiel upload by Lizbeth
+
+```{r}
+library(plotly)
+
+p1 <- trial_standard_new %>% ggplot() +
+  geom_point(aes(x = obs_yield_ha, y = obs_yield_ha_v2, color = use_plot_number), show.legend = F) +
+  facet_wrap(~use_trial_name) +
+  theme_xiaofei()
+
+ggplotly(p1)
+detach("package:plotly", unload = TRUE)
+```
+
+## Is numeric all traits?
+
+```{r}
+is_numeric(trial_data = trial_standard_new)
+```
+
+## Get the tidy data 
+
+```{r}
+meta_info = names(trial_standard_new)[str_detect(names(trial_standard_new), "use_")]
+meta_info = gsub("use_", "", meta_info)
+meta_info
+trial_tidy = trial_standard_new
+names(trial_tidy)= gsub("use_", "", names(trial_standard_new))
+# observations
+trait_list = names(trial_tidy)[str_detect(names(trial_tidy), "obs_")]
+trait_list = gsub("obs_", "", trait_list)
+trait_list
+names(trial_tidy)= gsub("obs_", "", names(trial_tidy))
+trial_tidy = trial_tidy[c(meta_info, trait_list)]
+```
+
+# Boxplots 
+
+```{r warning=FALSE}
+# remove columns with all NA
+my_dat_noNA <- trial_tidy[, colSums(is.na(trial_tidy)) < nrow(trial_tidy)]
+trait_wanted <- names(my_dat_noNA)[names(my_dat_noNA) %in% trait_list]
+for (i in 1:length(trait_wanted)) {
+  y_DATA <- my_dat_noNA[[trait_wanted[i]]] # data frame or vector?
+  x_DATA <- my_dat_noNA$trial_name
+  my_DATA <- my_dat_noNA
+  y_LABEL <- trait_wanted[i]
+  x_LABEL <- NULL
+  TITLE <- NULL
+  y_MAX <- max(y_DATA, na.rm = TRUE) * 1.2
+  y_MIN <- 0
+  plot_box <- ggplot(my_DATA, aes(x = x_DATA, y = y_DATA)) +
+    geom_violin(trim = FALSE, fill = "gray") +
+    geom_boxplot(width = 0.2) +
+    coord_cartesian(ylim = c(y_MIN, y_MAX)) +
+    theme_xiaofei() +
+    labs(
+      y = y_LABEL, x = x_LABEL,
+      title = TITLE
+    )
+  plot(plot_box)
+}
+```
+
+## Grouping boxplot
+
+```{r}
+plot_bxp <- trial_tidy %>%
+  pivot_longer(
+    cols = all_of(trait_wanted),
+    names_to = "var",
+    values_to = "values"
+  ) %>%
+  filter(!var %in% c(
+    "harvest_number",
+    "harvest_number_plan",
+    "germinated_number_plot",
+    "mites_3mon",
+    "planted_number_plot"
+  )) %>%
+  ggplot(aes(x = trial_name, y = values)) +
+  geom_violin(trim = FALSE, fill = "gray") +
+  geom_boxplot(width = 0.2, trim = FALSE) +
+  labs(x = NULL, y = NULL, title = "") +
+  theme_xiaofei() +
+  theme(
+    axis.text.x = element_text(size = 8, vjust = 1),
+    axis.text.y = element_text(size = 8),
+    plot.title = element_text(color = "black"),
+    
+  ) +
+  facet_wrap(~var,
+    ncol = 4, scales = "free_y"
+    #labeller = as_labeller(fct_labels)
+  ) +
+  theme(
+    strip.text.x = element_text(
+      size = 12, face = "bold.italic"
+    )
+  )
+plot_bxp
+# ggsave(paste0("images\\boxplot_", trial_interest, Sys.Date(), ".png"),
+#     plot = plot_bxp, units = "in", dpi = 300, width = 12, height = 10
+#   )
+```
+
+
+
