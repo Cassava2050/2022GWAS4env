@@ -27,18 +27,43 @@ source("https://raw.githubusercontent.com/Cassava2050/PPD/main/utilities_tidy.R"
 
 ## Load the files to check
 
+During the data double checking, it was necessary to remove trial 202101DVGN6_ciat from the Cassava base and fix some issues related with yield on trial 202232DVGN6_momi. The removing fact of the 202101DVGN6_ciat trial meant that it could not be downloaded again from the wizard, so it had to be downloaded as an individual trial from the "Manage trial" option of the Cassava Base. That is why it was necessary to download two files and then merge them. 
+
 ```{r}
 local_file <- "yes" # "no"
 if (local_file == "yes") {
   folder <- here::here("data//")  #"D:\\OneDrive - CGIAR\\Data Analysis\\HungLoc_2022\\data\\"
-  file <- "phenotype.csv"
+  file <- "phenotype2.csv"
   skip_col <- 3 # double check the number of col skipped
   trial_interest = "DVGN6"
   year_interest <- 2022
 }
 # 1) load the data
-sel_data <- read_cassavabase(phenotypeFile = paste0(folder, file))
+sel_data2 <- read_cassavabase(phenotypeFile = paste0(folder, file))
+
+local_file <- "yes" # "no"
+if (local_file == "yes") {
+  folder <- here::here("data//")  #"D:\\OneDrive - CGIAR\\Data Analysis\\HungLoc_2022\\data\\"
+  file <- "phenotype3.csv"
+  skip_col <- 3 # double check the number of col skipped
+  trial_interest = "DVGN6"
+  year_interest <- 2022
+}
+# 1) load the data
+sel_data3 <- read_cassavabase(phenotypeFile = paste0(folder, file))
+
+# bind sel_data2 and sel_data3 into a same data set
+sel_data <- sel_data2 %>% bind_rows(sel_data3)
 ```
+
+## fixing aditional issues
+
+The column hydrogen "cyanide ug/g wet basis|month 10|COMP:0000322" was wrong name at the time to upload the 202109DVGN6_momi trial, the trait initial vigor assessment 1-7|day 45|COMP:0000275 is going to be rename as "cyanide ug/g wet basis|month 10|COMP:0000322"
+
+```{r}
+sel_data <- sel_data %>% rename(`hydrogen cyanide ug/g wet basis|month 10|COMP:0000322` = `initial vigor assessment 1-7|day 45|COMP:0000275`)
+```
+
 
 ## Change columns into standar names
 
@@ -61,6 +86,7 @@ sel_data_kp %<>%
 
 names(sel_data_kp) = gsub("-", "_", names(sel_data_kp))
 ```
+
 
 ## Duplications in row and cols
 
@@ -99,6 +125,10 @@ sel_data_kp <- sel_data_kp %>%
 ```{r, fig.height=8, fig.width=8}
 trial_layout(sel_data_kp)
 ```
+
+The 202101DVGN6 layout plot needs to be fixed, because the planted is in cardinal way, where the correct way is in serpentine way
+
+## Fixing errors in planting way
 
 ## Check the clone name
 
