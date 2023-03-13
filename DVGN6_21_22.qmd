@@ -29,6 +29,7 @@ source("https://raw.githubusercontent.com/Cassava2050/PPD/main/utilities_tidy.R"
 
 During the data double checking, it was necessary to remove trial 202101DVGN6_ciat from the Cassava base and fix some issues related with yield on trial 202232DVGN6_momi. The removing fact of the 202101DVGN6_ciat trial meant that it could not be downloaded again from the wizard, so it had to be downloaded as an individual trial from the "Manage trial" option of the Cassava Base. That is why it was necessary to download two files and then merge them. 
 
+
 ```{r}
 local_file <- "yes" # "no"
 if (local_file == "yes") {
@@ -98,7 +99,8 @@ duplicated_plot <- row_col_dup(sel_data_kp)
 
 Below I'm going to add checks to 202101DVGN6_ciat trial
 
-```{r}
+```{r eval=FALSE}
+if(FALSE) { 
 checks_ciat <- sel_data_kp %>%
   filter(use_trial_name == "202101DVGN6_ciat", use_accession_name %in% c("COL2215", "CG1141-1", "CM4919-1", "SM2775-4", "SM2828-28", "SMB2446-2", "TAI8")) %>%
   select(use_plot_name) %>% pull() %>% unique()
@@ -118,6 +120,7 @@ sel_data_kp <- sel_data_kp %>%
             use_plot_name == "202101DVGN6_ciat_rep2_SMB2446-2_188" ~ "check",
             use_plot_name == "202101DVGN6_ciat_rep2_TAI8_185" ~ "check",
            TRUE ~ use_check_test)) 
+}
 ```
 
 ## Plot trial layout
@@ -125,10 +128,6 @@ sel_data_kp <- sel_data_kp %>%
 ```{r, fig.height=8, fig.width=8}
 trial_layout(sel_data_kp)
 ```
-
-The 202101DVGN6 layout plot needs to be fixed, because the planted is in cardinal way, where the correct way is in serpentine way
-
-## Fixing errors in planting way
 
 ## Check the clone name
 
@@ -172,7 +171,7 @@ accession_rep_ct <- trial_standard %>%
   count(use_trial_name, use_accession_name, use_rep_number)  %>%
   arrange(use_trial_name) %>%
   filter(n>1)
-accession_rep_ct %>% filter(n == 2)
+accession_rep_ct 
 ```
 
 ## Genotypes per trial
@@ -192,6 +191,7 @@ plants_plot <- trial_standard %>%
   count(obs_planted_number_plot) 
 
 plants_plot
+
 ```
 
 ## Frequency harvest plant number
@@ -208,21 +208,15 @@ plants_harvested %>%
   labs(x = "Harvest_plant_number", y = "Freq", fill = "Harvest_plant_number") +
   facet_wrap(~ use_trial_name)
 ```
-
-
-## Area per plant
-
-```{r}
-area_freq <- table((trial_standard$use_plot_width*trial_standard$use_plot_length)/4) %>% 
-  as.data.frame()
-colnames(area_freq) = c("area", "freq")
-area_freq
-```
-
-
 ## Compute germination, yield, yield_starch
 
 ```{r}
+  trial_standard <- trial_standard %>%
+    mutate(obs_germinated_number_plot =
+           ifelse( 
+            use_plot_name == "202232DVGN6_momi_rep1_BRA1001_153", 7, obs_germinated_number_plot)
+    ) 
+
 trial_standard_new <- trial_standard %>%
   mutate(obs_harvest_number_plan =
            case_when(str_detect(use_trial_name, "202101") &  str_detect(use_trial_name , "DVGN6") ~ 6,
@@ -234,7 +228,12 @@ trial_standard_new <- trial_standard %>%
          area_plant = (use_plot_length*use_plot_width)/obs_planted_number_plot,
          # 3) calculate the yield_v4 obs_planted_number_plot
          obs_yield_ha_v2 = (((obs_root_weight_plot*10000)/(area_plant*obs_harvest_number_plan))/1000),
-         obs_yield_ha = obs_DM_gravity * obs_yield_ha_v2 / 100)
+         obs_yield_DM_ha = obs_DM_gravity * obs_yield_ha_v2 / 100)
+
+
+# There is an error with obs_germinated_number_plot of 202232DVGN6_momi_rep1_BRA1001_153
+
+trial_standard_new %>% select(use_plot_name, obs_germinated_number_plot, obs_planted_number_plot) %>% filter(obs_germinated_number_plot > 100)
 ```
 
 ## Plot the yield_v2 vs yiel upload by Lizbeth
@@ -249,6 +248,25 @@ p1 <- trial_standard_new %>% ggplot() +
 
 ggplotly(p1)
 detach("package:plotly", unload = TRUE)
+```
+
+## Fixing some issues
+
+```{r}
+# fixing the issues
+# coalesce DM_raw with DM_raw_10mon. Are the same variables.
+
+trial_standard_new <-
+  trial_standard_new %>%
+  mutate(
+    obs_DM_raw =
+      coalesce(obs_DM_raw, obs_DM_raw_10mon)
+  ) %>%
+  mutate(obs_DM_gravity =
+           ifelse( 
+            use_plot_name == "202206DVGN6_ciat_rep1_COL40_17", 32.6, obs_DM_gravity)
+    )  %>%
+  select(-c("obs_DM_raw_10mon"))
 ```
 
 ## Is numeric all traits?
@@ -311,11 +329,22 @@ plot_bxp <- trial_tidy %>%
     values_to = "values"
   ) %>%
   filter(!var %in% c(
+    "germination_perc",
     "harvest_number",
     "harvest_number_plan",
     "germinated_number_plot",
     "mites_3mon",
-    "planted_number_plot"
+    "planted_number_plot",
+    "root_weight_water",
+    "root_weight_air",
+    "stake _plant",
+    "root_number_commercial",
+    "lodging1_3_6mon",
+    "HC_linamarase_10mon",
+    "root_weight_plot",
+    "shoot_weight_plot",
+    "branch_angle",
+    "WAB_20min_10mon"
   )) %>%
   ggplot(aes(x = trial_name, y = values)) +
   geom_violin(trim = FALSE, fill = "gray") +
@@ -329,7 +358,7 @@ plot_bxp <- trial_tidy %>%
     
   ) +
   facet_wrap(~var,
-    ncol = 4, scales = "free_y"
+    ncol = 6, scales = "free_y"
     #labeller = as_labeller(fct_labels)
   ) +
   theme(
@@ -342,6 +371,44 @@ plot_bxp
 #     plot = plot_bxp, units = "in", dpi = 300, width = 12, height = 10
 #   )
 ```
+
+## Do some correlations between dry matter by oven and dry matter by gravity specific
+
+```{r}
+library(ggpubr)
+
+sp <- ggscatter(trial_tidy %>% 
+                  filter(trial_name %in% c("202109DVGN6_momi", "202206DVGN6_ciat")),
+                x = "DM_gravity", y = "DM_raw", add = "reg.line", 
+                fill = "trial_name", shape = 21,
+   add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
+   conf.int = TRUE, # Add confidence interval
+   ggtheme = theme_xiaofei())  +
+  theme(legend.position = "none") +
+   labs(x = "DM by gravity (%)", y = "DM by oven (%)") +
+   facet_wrap(~ trial_name) +
+   stat_cor(method = "pearson", label.x = 10, label.y = 50)
+sp
+```
+
+## If I bind both trials
+
+```{r}
+ggscatter(trial_tidy %>% 
+                  filter(trial_name %in% c("202109DVGN6_momi", "202206DVGN6_ciat")),
+                x = "DM_gravity", y = "DM_raw",
+          add = "reg.line", fill = "trial_name", shape = 21,  
+   add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
+   conf.int = TRUE, # Add confidence interval
+   ggtheme = theme_xiaofei())  +
+   labs(x = "DM by gravity (%)", y = "DM by oven (%)") +
+   stat_cor(method = "pearson", label.x = 10, label.y = 50)
+
+
+```
+
+
+
 
 
 
