@@ -7,7 +7,6 @@ This repo contains the data analysis of four GWAS trials in Colombia. Each trial
 - 202232DVGN6_momi: Conducted in February 2022 at the Momi location, with 183 cassava clones tested.
 - 202206DVGN6_ciat: Conducted in March 2022 at the CIAT location, with 184 cassava clones tested.
 
-![](https://github.com/Cassava2050/Cassava2050/blob/main/header.png?raw=true)
 
 |        Trial_name       |       Harvest_date      |       Plant_date     |              Location             |     n_gen    |
 |:-----------------------:|:-----------------------:|:--------------------:|:---------------------------------:|:------------:|
