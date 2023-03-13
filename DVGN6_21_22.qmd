@@ -162,8 +162,12 @@ td <- createTD(trial_standard, genotype = 'use_accession_name',
 )
 
 
-plot(td, plotType = "map",
+map <- plot(td, plotType = "map",
      minLatRange = 12, minLongRange = 12)
+
+# ggsave(paste0("images\\map_", trial_interest, Sys.Date(), ".png"),
+#      plot = map, units = "in", dpi = 300, width = 12, height = 10
+#    )
 ```
 
 ```{r}
@@ -407,7 +411,12 @@ ggscatter(trial_tidy %>%
 
 ```
 
+## Save the tidy data for analysis
 
+```{r eval=FALSE}
+write.csv(trial_tidy, here::here("output", paste("01_", year_interest, trial_interest,
+  "_tidy_data4analysis_", Sys.Date(), ".csv", sep = "")), row.names = FALSE)
+```
 
 
 
