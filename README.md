@@ -9,9 +9,13 @@ This repo contains the data analysis of four GWAS trials in Colombia. Each trial
 
 ![](https://github.com/Cassava2050/DVGN6_21_22/blob/main/images/map_DVGN62023-03-13.png)
 
+<center>
+
 |        Trial_name       |       Harvest_date      |       Plant_date     |              Location             |     n_gen    |
 |:-----------------------:|:-----------------------:|:--------------------:|:---------------------------------:|:------------:|
 |     202101DVGN6_ciat    |     2022-February-04    |     2021-March-03    |       CIAT.   Valle, Colombia     |      136     |
 |     202109DVGN6_momi    |       2022-March-02     |     2021-April-21    |     Momil.   Cordoba, Colombia    |      136     |
 |     202206DVGN6_ciat    |       2023-March-03     |     2022-March-31    |       CIAT.   Valle, Colombia     |      184     |
 |     202232DVGN6_momi    |     2023-February-25    |      2022-May-18     |     Momil.   Cordoba, Colombia    |      183     |
+  
+</center>
