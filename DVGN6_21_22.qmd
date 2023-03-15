@@ -34,13 +34,14 @@ During the data double checking, it was necessary to remove trial 202101DVGN6_ci
 local_file <- "yes" # "no"
 if (local_file == "yes") {
   folder <- here::here("data//")  #"D:\\OneDrive - CGIAR\\Data Analysis\\HungLoc_2022\\data\\"
-  file <- "phenotype2.csv"
+  file <- "phenotype4.csv"
   skip_col <- 3 # double check the number of col skipped
   trial_interest = "DVGN6"
   year_interest <- 2022
 }
+
 # 1) load the data
-sel_data2 <- read_cassavabase(phenotypeFile = paste0(folder, file))
+sel_data <- read_cassavabase(phenotypeFile = paste0(folder, file))
 
 local_file <- "yes" # "no"
 if (local_file == "yes") {
@@ -57,42 +58,12 @@ sel_data3 <- read_cassavabase(phenotypeFile = paste0(folder, file))
 sel_data <- sel_data2 %>% bind_rows(sel_data3)
 ```
 
-## fixing aditional issues
-
-The column hydrogen "cyanide ug/g wet basis|month 10|COMP:0000322" was wrong name at the time to upload the 202109DVGN6_momi trial, the trait initial vigor assessment 1-7|day 45|COMP:0000275 is going to be rename as "cyanide ug/g wet basis|month 10|COMP:0000322"
-
-```{r}
-sel_data <- sel_data %>% rename(`hydrogen cyanide ug/g wet basis|month 10|COMP:0000322` = `initial vigor assessment 1-7|day 45|COMP:0000275`)
-```
-
-## Add quality traits missing in the data
-
-```{r}
-missing_data <- read.delim("clipboard", header = T, check.names = F)
-
-sel_data <- sel_data %>% left_join(missing_data, 
-                       by = c("observationUnitName" = "plot_name", 
-                              "dry matter content percentage|CO_334:0000092" = "Dry matter content percentage | CO_334:0000092",
-                              "time of boiling estimation minute|month 10|boiled root|COMP:0000190" = "time of boiling estimation minute|month 10|boiled root|COMP:0000190",
-                              "hydrogen cyanide ug/g wet basis|month 10|COMP:0000322" = "hydrogen cyanide ug/g wet basis|month 10|COMP:0000322",
-                              "Change in weight after boiling computation percentage|month 10|boiling time 20 minutes|COMP:0000224" = "Change in weight after boiling computation percentage|month 10|boiling time 20 minutes|COMP:0000224",
-                              "Change in weight after boiling computation percentage|month 10|boiling time 30 minutes|COMP:0000225" = "Change in weight after boiling computation percentage|month 10|boiling time 30 minutes|COMP:0000225",
-                              
-                              
-                              "dry matter content by table-top NIRS in percentage|CO_334:0002057" = "dry matter content by table-top NIRS in percentage|CO_334:0002057",
-                              "beta carotene content ug/g NIRS 400-2500 nm|CO_334:0001053" = "beta carotene content ug/g NIRS 400-2500 nm|CO_334:0001053",
-                              "Total carotenes ug/g NIRS 400-2500 nm|CO_334:0001051" = "Total carotenes ug/g NIRS 400-2500 nm |CO_334:0001051"))
-                                          
-```
 
 ## Change columns into standar names
 
 ```{r}
 # ---- Change columns into standar names ----
 sel_data_kp <- change_colname(sel_data, NA)
-
-sel_data_kp %>% filter(use_trial_name == "202101DVGN6_ciat") %>% select(obs_cook_time_10mon)
-sel_data_kp %>% distinct(use_trial_name)
 ```
 
 ## change the column class
@@ -117,33 +88,6 @@ names(sel_data_kp) = gsub("-", "_", names(sel_data_kp))
 duplicated_plot <- row_col_dup(sel_data_kp)
 ```
 
-### Fixing som errors
-
-Below I'm going to add checks to 202101DVGN6_ciat trial
-
-```{r eval=FALSE}
-if(FALSE) { 
-checks_ciat <- sel_data_kp %>%
-  filter(use_trial_name == "202101DVGN6_ciat", use_accession_name %in% c("COL2215", "CG1141-1", "CM4919-1", "SM2775-4", "SM2828-28", "SMB2446-2", "TAI8")) %>%
-  select(use_plot_name) %>% pull() %>% unique()
-
-sel_data_kp <- sel_data_kp %>% 
-  mutate(use_check_test = case_when( 
-            use_plot_name == "202101DVGN6_ciat_rep1_CG1141-1_78" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep1_CM4919-1_56" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep1_COL2215_57" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep1_SM2775-4_38" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep1_SMB2446-2_115" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep1_TAI8_95" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep2_CG1141-1_153" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep2_CM4919-1_258" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep2_COL2215_141" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep2_SM2775-4_145" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep2_SMB2446-2_188" ~ "check",
-            use_plot_name == "202101DVGN6_ciat_rep2_TAI8_185" ~ "check",
-           TRUE ~ use_check_test)) 
-}
-```
 
 ## Plot trial layout
 
@@ -237,12 +181,7 @@ plants_harvested %>%
 ## Compute germination, yield, yield_starch
 
 ```{r}
-  trial_standard <- trial_standard %>%
-    mutate(obs_germinated_number_plot =
-           ifelse( 
-            use_plot_name == "202232DVGN6_momi_rep1_BRA1001_153", 7, obs_germinated_number_plot)
-    ) 
-
+  
 trial_standard_new <- trial_standard %>%
   mutate(obs_harvest_number_plan =
            case_when(str_detect(use_trial_name, "202101") &  str_detect(use_trial_name , "DVGN6") ~ 6,
@@ -284,10 +223,6 @@ trial_standard_new <-
     obs_DM_raw =
       coalesce(obs_DM_raw, obs_DM_raw_10mon)
   ) %>%
-  mutate(obs_DM_gravity =
-           ifelse( 
-            use_plot_name == "202206DVGN6_ciat_rep1_COL40_17", 32.6, obs_DM_gravity)
-    )  %>%
   select(-c("obs_DM_raw_10mon"))
 ```
 
