@@ -65,12 +65,34 @@ The column hydrogen "cyanide ug/g wet basis|month 10|COMP:0000322" was wrong nam
 sel_data <- sel_data %>% rename(`hydrogen cyanide ug/g wet basis|month 10|COMP:0000322` = `initial vigor assessment 1-7|day 45|COMP:0000275`)
 ```
 
+## Add quality traits missing in the data
+
+```{r}
+missing_data <- read.delim("clipboard", header = T, check.names = F)
+
+sel_data <- sel_data %>% left_join(missing_data, 
+                       by = c("observationUnitName" = "plot_name", 
+                              "dry matter content percentage|CO_334:0000092" = "Dry matter content percentage | CO_334:0000092",
+                              "time of boiling estimation minute|month 10|boiled root|COMP:0000190" = "time of boiling estimation minute|month 10|boiled root|COMP:0000190",
+                              "hydrogen cyanide ug/g wet basis|month 10|COMP:0000322" = "hydrogen cyanide ug/g wet basis|month 10|COMP:0000322",
+                              "Change in weight after boiling computation percentage|month 10|boiling time 20 minutes|COMP:0000224" = "Change in weight after boiling computation percentage|month 10|boiling time 20 minutes|COMP:0000224",
+                              "Change in weight after boiling computation percentage|month 10|boiling time 30 minutes|COMP:0000225" = "Change in weight after boiling computation percentage|month 10|boiling time 30 minutes|COMP:0000225",
+                              
+                              
+                              "dry matter content by table-top NIRS in percentage|CO_334:0002057" = "dry matter content by table-top NIRS in percentage|CO_334:0002057",
+                              "beta carotene content ug/g NIRS 400-2500 nm|CO_334:0001053" = "beta carotene content ug/g NIRS 400-2500 nm|CO_334:0001053",
+                              "Total carotenes ug/g NIRS 400-2500 nm|CO_334:0001051" = "Total carotenes ug/g NIRS 400-2500 nm |CO_334:0001051"))
+                                          
+```
 
 ## Change columns into standar names
 
 ```{r}
 # ---- Change columns into standar names ----
 sel_data_kp <- change_colname(sel_data, NA)
+
+sel_data_kp %>% filter(use_trial_name == "202101DVGN6_ciat") %>% select(obs_cook_time_10mon)
+sel_data_kp %>% distinct(use_trial_name)
 ```
 
 ## change the column class
@@ -232,12 +254,8 @@ trial_standard_new <- trial_standard %>%
          area_plant = (use_plot_length*use_plot_width)/obs_planted_number_plot,
          # 3) calculate the yield_v4 obs_planted_number_plot
          obs_yield_ha_v2 = (((obs_root_weight_plot*10000)/(area_plant*obs_harvest_number_plan))/1000),
-         obs_yield_DM_ha = obs_DM_gravity * obs_yield_ha_v2 / 100)
+         obs_DM_yield_ha = obs_DM_gravity * obs_yield_ha_v2 / 100)
 
-
-# There is an error with obs_germinated_number_plot of 202232DVGN6_momi_rep1_BRA1001_153
-
-trial_standard_new %>% select(use_plot_name, obs_germinated_number_plot, obs_planted_number_plot) %>% filter(obs_germinated_number_plot > 100)
 ```
 
 ## Plot the yield_v2 vs yiel upload by Lizbeth
@@ -344,11 +362,11 @@ plot_bxp <- trial_tidy %>%
     "stake _plant",
     "root_number_commercial",
     "lodging1_3_6mon",
-    "HC_linamarase_10mon",
+    #"HC_linamarase_10mon",
     "root_weight_plot",
     "shoot_weight_plot",
-    "branch_angle",
-    "WAB_20min_10mon"
+    "branch_angle"
+    #"WAB_20min_10mon"
   )) %>%
   ggplot(aes(x = trial_name, y = values)) +
   geom_violin(trim = FALSE, fill = "gray") +
@@ -371,9 +389,9 @@ plot_bxp <- trial_tidy %>%
     )
   )
 plot_bxp
-# ggsave(paste0("images\\boxplot_", trial_interest, Sys.Date(), ".png"),
-#     plot = plot_bxp, units = "in", dpi = 300, width = 12, height = 10
-#   )
+ggsave(paste0("images\\boxplot_", trial_interest, Sys.Date(), ".png"),
+    plot = plot_bxp, units = "in", dpi = 300, width = 12, height = 10
+  )
 ```
 
 ## Do some correlations between dry matter by oven and dry matter by gravity specific
@@ -417,6 +435,127 @@ ggscatter(trial_tidy %>%
 write.csv(trial_tidy, here::here("output", paste("01_", year_interest, trial_interest,
   "_tidy_data4analysis_", Sys.Date(), ".csv", sep = "")), row.names = FALSE)
 ```
+
+# Data analysis
+
+## master_data to save the results
+
+```{r}
+master_data <- list()
+```
+
+
+## Load the tidy data
+
+```{r}
+trial_set_number = 1
+# all files in the folder
+list_file = list.files(here::here("output"))
+# tidy data of the trials interested
+sel_file = list_file[str_detect(list_file, "_tidy_data4analysis_") &
+                       str_detect(list_file,
+                                  paste(year_interest, trial_interest, sep=""))]
+sel_file
+# the data we will use
+sel_file_use = sel_file[1]
+
+trial1_tidy = read.csv(here::here("output", sel_file_use), header=TRUE,
+                        stringsAsFactors = FALSE,
+                        as.is=T,
+                        check.names = FALSE)
+if(trial_set_number == 1){
+  trial_tidy_all = trial1_tidy
+}
+```
+
+## Obtain all the trait information using a cloud file (gitHub) -------
+
+```{r}
+trait_all <-
+  read.csv("https://raw.githubusercontent.com/lfdelgadom/standar_col_names_CB/main/standar_col_names.csv") %>%
+  select(analysis_col_name) %>%
+  filter(str_detect(analysis_col_name, "obs_"))
+trait_all_adj <- gsub("obs_", "", trait_all$analysis_col_name)
+trait_all_adj = c(trait_all_adj,
+                  "harvest_number_plan", "germination_perc",
+                  "yield_ha_v2", "DM_yield_ha", "starch_content")
+trait_all_adj <- gsub("-", "_", trait_all_adj)
+```
+
+## Meta info.
+
+```{r}
+meta_all <-
+  read.csv("https://raw.githubusercontent.com/lfdelgadom/standar_col_names_CB/main/standar_col_names.csv") %>%
+  select(analysis_col_name) %>%
+  filter(str_detect(analysis_col_name, "use_"))
+meta_all_adj <- gsub("use_", "", meta_all$analysis_col_name)
+meta_all_adj <- c(
+  meta_all_adj,
+  "check_released", "latitude", "longitude",
+  "altitude", "department", "country",
+  "ag_zone", "location_short"
+)
+```
+
+## Select the observations for analysis
+
+```{r}
+names(trial_tidy_all) <- gsub("-", "_", names(trial_tidy_all))
+analysis_trait <- names(trial_tidy_all)[names(trial_tidy_all) %in% trait_all_adj]
+print("All the traits investigated:")
+print(analysis_trait)
+```
+
+
+## Select the meta information for analysis
+
+```{r}
+meta_col <- names(trial_tidy_all)[names(trial_tidy_all) %in% meta_all_adj]
+print("All the meta information:")
+print(meta_col)
+```
+
+## Check the SD of each trait
+
+```{r}
+trial_rm_sd <- remove_no_var_tidy(my_dat = trial_tidy_all,
+                   analysis_trait = analysis_trait,
+                   meta_info = meta_col)
+
+master_data[["mean_of_sd"]] = sd_mean
+```
+
+## Trait ideal
+
+```{r}
+trait_ideal <- analysis_trait[-c(5, 11:13, 16, 18:21, 25:27, 31:32, 34, 38, 40, 41)]
+print("the trait ideal is:"); trait_ideal
+```
+
+## Single trial analysis
+
+Agriutilities library
+
+```{r}
+
+my_dat <- trial_rm_sd %>% 
+  add_column(block = NA) %>% mutate(block = as.factor(block))
+
+results <- check_design_met(
+  data = my_dat,
+  genotype = "accession_name",
+  trial = "trial_name",
+  traits = trait_ideal,
+  rep = "rep_number",
+  col = "col_number",
+  row = "row_number",
+  block = "block"
+)
+
+```
+
+
 
 
 
