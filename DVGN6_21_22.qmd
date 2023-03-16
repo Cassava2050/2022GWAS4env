@@ -27,9 +27,6 @@ source("https://raw.githubusercontent.com/Cassava2050/PPD/main/utilities_tidy.R"
 
 ## Load the files to check
 
-During the data double checking, it was necessary to remove trial 202101DVGN6_ciat from the Cassava base and fix some issues related with yield on trial 202232DVGN6_momi. The removing fact of the 202101DVGN6_ciat trial meant that it could not be downloaded again from the wizard, so it had to be downloaded as an individual trial from the "Manage trial" option of the Cassava Base. That is why it was necessary to download two files and then merge them. 
-
-
 ```{r}
 local_file <- "yes" # "no"
 if (local_file == "yes") {
@@ -43,21 +40,7 @@ if (local_file == "yes") {
 # 1) load the data
 sel_data <- read_cassavabase(phenotypeFile = paste0(folder, file))
 
-local_file <- "yes" # "no"
-if (local_file == "yes") {
-  folder <- here::here("data//")  #"D:\\OneDrive - CGIAR\\Data Analysis\\HungLoc_2022\\data\\"
-  file <- "phenotype3.csv"
-  skip_col <- 3 # double check the number of col skipped
-  trial_interest = "DVGN6"
-  year_interest <- 2022
-}
-# 1) load the data
-sel_data3 <- read_cassavabase(phenotypeFile = paste0(folder, file))
-
-# bind sel_data2 and sel_data3 into a same data set
-sel_data <- sel_data2 %>% bind_rows(sel_data3)
 ```
-
 
 ## Change columns into standar names
 
@@ -81,13 +64,11 @@ sel_data_kp %<>%
 names(sel_data_kp) = gsub("-", "_", names(sel_data_kp))
 ```
 
-
 ## Duplications in row and cols
 
 ```{r}
 duplicated_plot <- row_col_dup(sel_data_kp)
 ```
-
 
 ## Plot trial layout
 
@@ -154,7 +135,6 @@ trial_standard %>% group_by(use_trial_name, use_harvest_date, use_plant_date, us
 
 ## plot plant number
 
-
 ```{r}
 plants_plot <- trial_standard %>%
   group_by(use_trial_name) %>%
@@ -178,6 +158,7 @@ plants_harvested %>%
   labs(x = "Harvest_plant_number", y = "Freq", fill = "Harvest_plant_number") +
   facet_wrap(~ use_trial_name)
 ```
+
 ## Compute germination, yield, yield_starch
 
 ```{r}
@@ -232,7 +213,7 @@ trial_standard_new <-
 is_numeric(trial_data = trial_standard_new)
 ```
 
-## Get the tidy data 
+## Get the tidy data
 
 ```{r}
 meta_info = names(trial_standard_new)[str_detect(names(trial_standard_new), "use_")]
@@ -248,7 +229,7 @@ names(trial_tidy)= gsub("obs_", "", names(trial_tidy))
 trial_tidy = trial_tidy[c(meta_info, trait_list)]
 ```
 
-# Boxplots 
+# Boxplots
 
 ```{r warning=FALSE}
 # remove columns with all NA
@@ -324,9 +305,9 @@ plot_bxp <- trial_tidy %>%
     )
   )
 plot_bxp
-ggsave(paste0("images\\boxplot_", trial_interest, Sys.Date(), ".png"),
-    plot = plot_bxp, units = "in", dpi = 300, width = 12, height = 10
-  )
+# ggsave(paste0("images\\boxplot_", trial_interest, Sys.Date(), ".png"),
+#     plot = plot_bxp, units = "in", dpi = 300, width = 12, height = 10
+#   )
 ```
 
 ## Do some correlations between dry matter by oven and dry matter by gravity specific
@@ -335,7 +316,7 @@ ggsave(paste0("images\\boxplot_", trial_interest, Sys.Date(), ".png"),
 library(ggpubr)
 
 sp <- ggscatter(trial_tidy %>% 
-                  filter(trial_name %in% c("202109DVGN6_momi", "202206DVGN6_ciat")),
+                  filter(!trial_name %in% c("202232DVGN6_momi")),
                 x = "DM_gravity", y = "DM_raw", add = "reg.line", 
                 fill = "trial_name", shape = 21,
    add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
@@ -352,7 +333,7 @@ sp
 
 ```{r}
 ggscatter(trial_tidy %>% 
-                  filter(trial_name %in% c("202109DVGN6_momi", "202206DVGN6_ciat")),
+                  filter(!trial_name %in% c("202232DVGN6_momi")),
                 x = "DM_gravity", y = "DM_raw",
           add = "reg.line", fill = "trial_name", shape = 21,  
    add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
@@ -378,7 +359,6 @@ write.csv(trial_tidy, here::here("output", paste("01_", year_interest, trial_int
 ```{r}
 master_data <- list()
 ```
-
 
 ## Load the tidy data
 
@@ -442,7 +422,6 @@ print("All the traits investigated:")
 print(analysis_trait)
 ```
 
-
 ## Select the meta information for analysis
 
 ```{r}
@@ -464,11 +443,11 @@ master_data[["mean_of_sd"]] = sd_mean
 ## Trait ideal
 
 ```{r}
-trait_ideal <- analysis_trait[-c(5, 11:13, 16, 18:21, 25:27, 31:32, 34, 38, 40, 41)]
+trait_ideal <- analysis_trait[-c(5, 11:13, 16, 18:21, 25, 27, 31:32, 34, 38, 40, 41)]
 print("the trait ideal is:"); trait_ideal
 ```
 
-## Single trial analysis
+## Check design experimental
 
 Agriutilities library
 
@@ -488,10 +467,131 @@ results <- check_design_met(
   block = "block"
 )
 
+plot(results, type = "connectivity")
+
+summary <- results$summ_traits %>% add_column(Exp_design = "res_row_col")
+master_data[["summ_traits"]] <- summary
+```
+
+## Check reps of yield in 202101DVGN6_ciat
+
+## Single trial analysis
+
+```{r}
+obj <- single_trial_analysis(results = results,
+                             progress = TRUE,
+                             remove_outliers = TRUE,
+                             engine = "asreml")
+
+trials <- unique(my_dat$trial_name)
+header_sort = vector()
+i = 1
+for (i in 1:length(trials)) {
+  for (j in 1:length(trait_ideal)) {
+    blue_blup <- obj$blues_blups %>% 
+      filter(trial == trials[i]) %>% 
+      select(-c(trial, seBLUEs, seBLUPs, wt)) %>% 
+      pivot_wider(names_from = "trait", values_from = c("BLUEs", "BLUPs"))
+    
+    header_sort = c(header_sort,
+                  grep(trait_ideal[j], sort(names(blue_blup)), value=TRUE))
+  blue_blup <- blue_blup %>% dplyr::select(genotype, any_of(header_sort))
+  }
+ master_data[[paste0("BLUP_BLUE_", trials[i])]] <- blue_blup
+}
+```
+
+## Single heritability
+
+```{r}
+single_h2 <- obj$resum_fitted_model[ ,1:3] %>% 
+  group_by(trial) %>%
+  spread(trait, value = heritability) 
+
+master_data[["single_h2"]] <- single_h2
+  
+```
+
+## Check reps of yield in 202101DVGN6_ciat
+
+```{r fig.width=12}
+GWAS_ciat <- my_dat %>% filter(trial_name == "202101DVGN6_ciat") %>% 
+  select(accession_name, rep_number, yield_ha_v2) %>% 
+  ggplot(aes(x = accession_name, y = yield_ha_v2, fill = accession_name)) +
+  geom_boxplot(show.legend = F) +
+  labs(x = NULL) +
+  theme_xiaofei() +
+  theme(axis.text.x = element_text(size=6, vjust = 1))
+
+ggsave(paste0("images\\gwas_ciat_", Sys.Date(), ".png"),
+     plot = GWAS_ciat, units = "in", dpi = 300, width = 18, height = 10
+   )
+
+# "202101DVGN6_ciat"
+
+i = 1
+for (i in 1:length(trials)) {
+  
+  cat("\n_______________")
+  cat("\nTrial:", trials[i], "\n")
+  cat("_______________\n")
+  
+
+test <- my_dat %>% filter(trial_name == trials[i], !check_test == "check") %>% 
+  select(accession_name, rep_number, any_of(trait_ideal)) %>% 
+  discard(~all(is.na(.) | . =="")) %>% 
+  pivot_longer(!c(accession_name, rep_number), names_to = "trait", values_to = "value") %>% 
+  #group_by(accession_name) %>%
+  pivot_wider(names_from = rep_number, values_from = value)
+
+colnames(test) <- c("accession_name", "trait", "rep_1", "rep_2")
+
+corplot <- test %>% ggplot(aes(x = rep_1, y = rep_2)) +
+  geom_jitter(show.legend = F, size = 2) +
+  theme_xiaofei() +
+  labs(title = trials[i]) +
+  facet_wrap(~ trait, scales = "free" )
+
+ggsave(paste0("images\\corplot_", trials[i], ".png"),
+     plot = corplot, units = "in", dpi = 300, width = 18, height = 10
+   )
+
+correlations <- test %>% group_by(trait) %>% 
+  summarize(cor = cor(rep_1, rep_2, use = "complete.obs")) %>% 
+  arrange(desc(cor)) %>% 
+  mutate(trial = trials[i])
+
+if (i == 1) {
+    cor_table <- correlations
+  } else {
+    cor_table <- rbind.data.frame(cor_table, correlations)
+  }
+  i <- i + 1
+
+}
+
+cor_table %>% 
+  pivot_wider(names_from = "trial", values_from = "cor") %>% 
+  write.table("clipboard",  sep="\t", col.names = T, row.names = F, na = "")
+
 ```
 
 
 
+```{r}
+root_color <- my_dat %>% filter(trial_name == "202101DVGN6_ciat", 
+                  !check_test == "check") %>% 
+  select(accession_name, rep_number, any_of(trait_ideal)) %>% 
+  discard(~all(is.na(.) | . =="")) %>% 
+  pivot_longer(!c(accession_name, rep_number), names_to = "trait", values_to = "value") %>% 
+  #group_by(accession_name) %>%
+  pivot_wider(names_from = rep_number, values_from = value) %>% 
+  filter(trait == "root_skin_color1_3") 
+
+colnames(root_color) <- c("accession_name", "trait", "rep_1", "rep_2")
+  root_color %>% 
+    summarize(cor = cor(rep_1, rep_2, use = "complete.obs"))
+```
 
 
 
