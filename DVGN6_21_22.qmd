@@ -593,5 +593,23 @@ colnames(root_color) <- c("accession_name", "trait", "rep_1", "rep_2")
     summarize(cor = cor(rep_1, rep_2, use = "complete.obs"))
 ```
 
+```{r}
+sandra <- read.delim("clipboard", header = T, check.names = F)
+
+sandra <- sandra %>% 
+  filter(is.na(is_a_control)) %>% 
+  select(-c(is_a_control, plot_number, block_number)) %>% 
+  pivot_longer(!c(accession_name, rep_number), 
+               names_to = "root color visual rating 1-3|CO_334:0000221", values_to = "value") %>% 
+  #group_by(accession_name) %>%
+  pivot_wider(names_from = rep_number, values_from = value)
+
+colnames(sandra) <- c("accession_name", "trait", "rep_1", "rep_2")
+
+sandra %>% 
+    summarize(cor = cor(rep_1, rep_2, use = "complete.obs"))
+```
+
+
 
 
