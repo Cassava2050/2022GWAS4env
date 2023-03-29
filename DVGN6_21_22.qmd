@@ -21,7 +21,18 @@ The trials were managed by CIAT and the locations were:
 ```{r}
 rm(list = ls())
 library(pacman)
-pacman::p_load(tidyverse, fauxnaif, readxl, yarrr, dplyr, knitr, rmarkdown, statgenSTA, statgenGxE, openxlsx, QBMS, magrittr, agriutilities, asreml, SpATS, ggsci)
+pacman::p_load(tidyverse, 
+               fauxnaif, 
+               readxl, 
+               yarrr, 
+               statgenSTA, 
+               statgenGxE, 
+               openxlsx, 
+               QBMS, 
+               agriutilities, 
+               asreml, 
+               SpATS, 
+               ggsci)
 source("https://raw.githubusercontent.com/Cassava2050/PPD/main/utilities_tidy.R")
 ```
 
