@@ -11,11 +11,11 @@ This repo contains the data analysis of four GWAS trials in Colombia. Each trial
 
 <div align="center">
 
-|        Trial_name       |       Harvest_date      |       Plant_date     |              Location             |     n_gen    |
-|:-----------------------:|:-----------------------:|:--------------------:|:---------------------------------:|:------------:|
-|     202101DVGN6_ciat    |     2022-February-04    |     2021-March-03    |       CIAT.   Valle, Colombia     |      136     |
-|     202109DVGN6_momi    |       2022-March-02     |     2021-April-21    |     Momil.   Cordoba, Colombia    |      136     |
-|     202206DVGN6_ciat    |       2023-March-03     |     2022-March-31    |       CIAT.   Valle, Colombia     |      184     |
-|     202232DVGN6_momi    |     2023-February-25    |      2022-May-18     |     Momil.   Cordoba, Colombia    |      183     |
+|       <br>Trial_name       |      <br>Plant_date     |      <br>Harvest_date      |             <br>Location             |    <br>n_gen    |
+|:--------------------------:|:-----------------------:|:--------------------------:|:------------------------------------:|:---------------:|
+|    <br>202101DVGN6_ciat    |    <br>2021-March-03    |    <br>2022-February-04    |      <br>CIAT.   Valle, Colombia     |     <br>136     |
+|    <br>202109DVGN6_momi    |    <br>2021-April-21    |      <br>2022-March-02     |    <br>Momil.   Cordoba, Colombia    |     <br>136     |
+|    <br>202206DVGN6_ciat    |    <br>2022-March-31    |      <br>2023-March-03     |      <br>CIAT.   Valle, Colombia     |     <br>184     |
+|    <br>202232DVGN6_momi    |     <br>2022-May-18     |    <br>2023-February-25    |    <br>Momil.   Cordoba, Colombia    |     <br>183     |
   
 </div>
