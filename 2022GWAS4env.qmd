@@ -22,17 +22,16 @@ The trials were managed by CIAT and the locations were:
 rm(list = ls())
 library(pacman)
 pacman::p_load(tidyverse, 
-               fauxnaif, 
                readxl, 
-               yarrr, 
                statgenSTA, 
                statgenGxE, 
                openxlsx, 
-               QBMS, 
                agriutilities, 
                asreml, 
                SpATS, 
-               ggsci)
+               ggsci,
+               lubridate,
+               magrittr)
 source("https://raw.githubusercontent.com/Cassava2050/PPD/main/utilities_tidy.R")
 ```
 
@@ -114,7 +113,6 @@ trial_standard <- add_GIS(trial_standard)
 
 ![](images/map.png)
 
-
 ```{r}
 accession_rep_ct <- trial_standard %>%
   count(use_trial_name, use_accession_name, use_rep_number)  %>%
@@ -126,8 +124,17 @@ accession_rep_ct
 ## Genotypes per trial
 
 ```{r}
-trial_standard %>% group_by(use_trial_name, use_harvest_date, use_plant_date, use_location) %>% 
+conducted_trials <- 
+  trial_standard %>% group_by(use_trial_name, use_plant_date,use_harvest_date, use_location) %>% 
   summarise(n_gen = n_distinct(use_accession_name)) %>% 
+  mutate(harvesting_time = 
+           interval(ymd(use_plant_date), ymd(use_harvest_date)) %>% as.period,
+         harvesting_time = paste0(harvesting_time@month, "month ", harvesting_time@day, "day")) %>% 
+  ungroup()
+
+conducted_trials
+
+  conducted_trials %>% relocate(harvesting_time, .after = use_harvest_date) %>% 
   write.table("clipboard", sep="\t", col.names = T, row.names = F)
 ```
 
@@ -259,19 +266,19 @@ plot_bxp <- trial_tidy %>%
     names_to = "var",
     values_to = "values"
   ) %>%
-  filter(!var %in% c(
+  filter(var %in% c(
     "germination_perc",
-    "harvest_number",
-    "harvest_number_plan",
+    #"harvest_number",
+    #"harvest_number_plan",
     "germinated_number_plot",
     "mites_3mon",
-    "planted_number_plot",
-    "root_weight_water",
-    "root_weight_air",
-    "stake_plant",
+    #"planted_number_plot",
+    #"root_weight_water",
+    #"root_weight_air",
+    #"stake_plant",
     "root_number_commercial",
     "lodging1_3_6mon",
-    #"HC_linamarase_10mon",
+    "HC_linamarase_10mon",
     "root_weight_plot",
     "shoot_weight_plot",
     "branch_angle",
@@ -281,7 +288,7 @@ plot_bxp <- trial_tidy %>%
     "root_peduncle1_3", 
     "thrips1_5", 
     "root_shape1_6",
-    "yield_ha_v2",
+    #"yield_ha_v2",
     "root_number",
     "root_constriction1_3",
     "root_length1_3"
@@ -342,6 +349,52 @@ ggscatter(trial_tidy %>%
 
 ```
 
+# There are issues related with plot number need to be fixed.
+
+The trial with no fixed data is 202101DVGN6_ciat
+
+```{r}
+data_lab <- read_excel("data/data_wrong_fromlab.xlsx", 
+    sheet = "Results")
+```
+
+```{r}
+rep1 <- trial_tidy %>% 
+  filter(trial_name ==  "202101DVGN6_ciat", rep_number == 1) %>% 
+  select(-c(WAB_20min_10mon, betacarotenoid_nirs, carotenoidtotal, cook_time_10mon, DM_nirs, DM_raw, HCN_linamarase_10mon, WAB_30min_10mon))
+
+
+rep1_ql <- data_lab %>% 
+  filter(str_detect(`Plot name`, "rep1")) %>% 
+  select(-Entrada)
+
+rep1_fixed <- rep1 %>% 
+  left_join(rep1_ql, by = c("accession_name" = "VARIEDAD")) 
+```
+
+```{r}
+rep2 <- trial_tidy %>% 
+  filter(trial_name ==  "202101DVGN6_ciat", rep_number == 2) %>% 
+  select(-c(WAB_20min_10mon, betacarotenoid_nirs, carotenoidtotal, cook_time_10mon, DM_nirs, DM_raw, HCN_linamarase_10mon, WAB_30min_10mon))
+
+
+rep2_ql <- data_lab %>% 
+  filter(str_detect(`Plot name`, "rep2")) %>% 
+  select(-Entrada)
+
+rep2_fixed <- rep2 %>% 
+  left_join(rep2_ql, by = c("accession_name" = "VARIEDAD"))
+
+```
+
+```{r}
+fixed_trial01 <- rep1_fixed %>% bind_rows(rep2_fixed)
+
+trial_tidy <- trial_tidy %>% 
+  filter(!trial_name ==  "202101DVGN6_ciat") %>% 
+  bind_rows(fixed_trial01)
+```
+
 ## Save the tidy data for analysis
 
 ```{r eval=FALSE}
@@ -350,6 +403,31 @@ write.csv(trial_tidy, here::here("output", paste("01_", year_interest, trial_int
 ```
 
 # Data analysis
+
+## Load libraries
+
+```{r}
+rm(list = ls())
+library(pacman)
+pacman::p_load(tidyverse, 
+               fauxnaif, 
+               readxl, 
+               yarrr, 
+               statgenSTA, 
+               statgenGxE, 
+               openxlsx, 
+               QBMS, 
+               agriutilities, 
+               asreml, 
+               SpATS, 
+               ggsci,
+               lubridate,
+               magrittr,
+               corrplot)
+source("https://raw.githubusercontent.com/Cassava2050/PPD/main/utilities_tidy.R")
+trial_interest <- "DVGN6"
+year_interest <- 2022
+```
 
 ## master_data to save the results
 
@@ -369,7 +447,7 @@ sel_file = list_file[str_detect(list_file, "_tidy_data4analysis_") &
                                   paste(year_interest, trial_interest, sep=""))]
 sel_file
 # the data we will use
-sel_file_use = sel_file[1]
+sel_file_use = sel_file[3]
 
 trial1_tidy = read.csv(here::here("output", sel_file_use), header=TRUE,
                         stringsAsFactors = FALSE,
@@ -377,6 +455,33 @@ trial1_tidy = read.csv(here::here("output", sel_file_use), header=TRUE,
                         check.names = FALSE)
 if(trial_set_number == 1){
   trial_tidy_all = trial1_tidy
+}
+```
+
+```{r}
+if(FALSE) { 
+# save quality lab data fixed
+master_data <- list()
+fixed_202101 <- trial_tidy_all %>% 
+  filter(trial_name == "202101DVGN6_ciat") %>% 
+  select(-c(`Plot name`, Parcela))
+
+master_data[["data_fixed"]] <- fixed_202101  
+
+
+plot_names <- trial_tidy_all %>% 
+  filter(trial_name == "202101DVGN6_ciat") %>% 
+  select(plot_name, plot_number, row_number, col_number, accession_name, `Plot name`, Parcela) %>% 
+  rename(plot_name_correct = plot_name, plot_number_correct = plot_number,
+         plot_name_wrong = `Plot name`,
+         plot_number_wrong = Parcela)
+
+master_data[["plot_names"]] <- plot_names
+
+folder_output <- here::here("output//")
+meta_file_name <- paste0(folder_output, paste0("202101_fixed_", Sys.Date(), "_.xlsx" ))
+write.xlsx(master_data, file = meta_file_name)
+
 }
 ```
 
@@ -440,8 +545,29 @@ master_data[["mean_of_sd"]] = sd_mean
 ## Trait ideal
 
 ```{r}
-trait_ideal <- analysis_trait[-c(5, 11:13, 16, 18:21, 25, 27, 31:32, 34, 38, 40, 41)]
+
+no_traits_for_analysis <- c("stake_plant" , "planted_number_plot", 
+                            "harvest_number", "root_weight_air", 
+                            "root_weight_water", "harvest_number_plan",
+                            "yield_ha_v2", "root_rot_perc"
+)
+
+
+trait_ideal <- analysis_trait[!analysis_trait %in% no_traits_for_analysis]
 print("the trait ideal is:"); trait_ideal
+```
+
+# Genotypic correlation (Phenotypic values)
+
+```{r}
+correlation <- gg_cor(
+  colours = c("red", "white", "blue"),
+  data = trial_rm_sd[ ,trait_ideal],
+  label_size = 1.8
+)
+# ggsave(paste0("images\\pheno_corr_", trial_interest, Sys.Date(), ".png"),
+#      plot = correlation, units = "in", dpi = 300, width = 12, height = 6
+#    )
 ```
 
 ## Check design experimental
@@ -464,20 +590,37 @@ results <- check_design_met(
   block = "block"
 )
 
-plot(results, type = "connectivity")
+shared <- plot(results, type = "connectivity")
 
-summary <- results$summ_traits %>% add_column(Exp_design = "res_row_col")
+# ggsave(paste0('images\\shared_', trial_interest, "_", "_", Sys.Date(), ".png"),
+#        plot = shared, units = "in", dpi = 300, width = 8, height = 6)
+  
+
+summary <- results$summ_traits 
+
+summary %>% 
+  ggplot(aes(x = traits , y = trial_name, label = round(miss_perc, 1)))+
+  geom_tile(aes(fill = miss_perc ), color = "gray")+
+  geom_text(color = "white")+
+  theme_minimal(base_size = 13)+
+  labs(title = "Percentage of missing values (exp/trait)", x = "", y = "") +
+  theme(axis.text.x = element_text(hjust = 1 , angle = 75, size = 12),
+        axis.text.y = element_text(size = 16))
+
+# ggsave(paste0("images\\missing_", trial_interest, Sys.Date(), ".png"),
+#      units = "in", dpi = 300, width = 12, height = 6
+#    )
+
+
 master_data[["summ_traits"]] <- summary
 ```
-
-## Check reps of yield in 202101DVGN6_ciat
 
 ## Single trial analysis
 
 ```{r}
 obj <- single_trial_analysis(results = results,
                              progress = TRUE,
-                             remove_outliers = TRUE,
+                             remove_outliers = FALSE,
                              engine = "asreml")
 
 trials <- unique(my_dat$trial_name)
@@ -506,101 +649,205 @@ single_h2 <- obj$resum_fitted_model[ ,1:3] %>%
   spread(trait, value = heritability) 
 
 master_data[["single_h2"]] <- single_h2
-  
 ```
 
-## Check reps of yield in 202101DVGN6_ciat
+## Multi environmetal analysis
 
-```{r fig.width=12}
-GWAS_ciat <- my_dat %>% filter(trial_name == "202101DVGN6_ciat") %>% 
-  select(accession_name, rep_number, yield_ha_v2) %>% 
-  ggplot(aes(x = accession_name, y = yield_ha_v2, fill = accession_name)) +
-  geom_boxplot(show.legend = F) +
-  labs(x = NULL) +
-  theme_xiaofei() +
-  theme(axis.text.x = element_text(size=6, vjust = 1))
+```{r}
+met_results <- met_analysis(obj, 
+                            vcov = "fa2",
+                            progress = TRUE)
+# h2 gxe
+master_data[["h2_gxe"]] <- 
+  met_results$heritability %>% 
+  arrange(desc(h2)) %>%
+  mutate(across(where(is.numeric), round, 2))
+master_data$h2_gxe %>%
+  write.table("clipboard", col.names = T, row.names = F, sep = "\t")
+# BLUPs gxe
+BLUPs_table <- 
+  met_results$overall_BLUPs %>% 
+  select(-c(std.error, status)) %>% 
+  group_by(genotype) %>% 
+  spread(trait, value = predicted.value) %>% 
+  rename("accession_name" = genotype) %>% 
+  mutate(across(where(is.numeric), round, 2)) %>% 
+  ungroup() 
+#save the BLUPs data
+master_data[[paste0("BLUPs_", "gxe")]] <- BLUPs_table
+```
 
-ggsave(paste0("images\\gwas_ciat_", Sys.Date(), ".png"),
-     plot = GWAS_ciat, units = "in", dpi = 300, width = 18, height = 10
-   )
+## Genotypic Correlation: Locations
 
-# "202101DVGN6_ciat"
+```{r dpi=300}
+#Yield
+corrplot(met_results$VCOV$yield_ha$CORR, method="color",  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black",
+         tl.cex = 0.8,#Text label color and rotation
+         diag=T 
+         )
+#Dry matter
+corrplot(met_results$VCOV$DM_gravity$CORR, method="color",  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black",
+         tl.cex = 0.8,#Text label color and rotation
+         diag=T 
+         )
+# plant_type
+corrplot(met_results$VCOV$plant_type$CORR, method="color",  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black",
+         tl.cex = 0.8,#Text label color and rotation
+         diag=T
+         )
 
-i = 1
-for (i in 1:length(trials)) {
+# WAB_30min_10mon
+corrplot(met_results$VCOV$WAB_30min_10mon$CORR, method="color",  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black",
+         tl.cex = 0.8,#Text label color and rotation
+         diag=T
+         )
+
+# cook_time_10mon
+corrplot(met_results$VCOV$cook_time_10mon$CORR, method="color",  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black",
+         tl.cex = 0.8,#Text label color and rotation
+         diag=T
+         )
+
+# HCN_linamarase_10mon
+corrplot(met_results$VCOV$HCN_linamarase_10mon$CORR, method="color",  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black",
+         tl.cex = 0.8,#Text label color and rotation
+         diag=T
+         )
+```
+
+## Save the BLUEs or raw data across the trials
+
+```{r}
+variables <- trait_ideal
+for (var in variables) {
   
-  cat("\n_______________")
-  cat("\nTrial:", trials[i], "\n")
-  cat("_______________\n")
-  
-
-test <- my_dat %>% filter(trial_name == trials[i], !check_test == "check") %>% 
-  select(accession_name, rep_number, any_of(trait_ideal)) %>% 
-  discard(~all(is.na(.) | . =="")) %>% 
-  pivot_longer(!c(accession_name, rep_number), names_to = "trait", values_to = "value") %>% 
-  #group_by(accession_name) %>%
-  pivot_wider(names_from = rep_number, values_from = value)
-
-colnames(test) <- c("accession_name", "trait", "rep_1", "rep_2")
-
-corplot <- test %>% ggplot(aes(x = rep_1, y = rep_2)) +
-  geom_jitter(show.legend = F, size = 2) +
-  theme_xiaofei() +
-  labs(title = trials[i]) +
-  facet_wrap(~ trait, scales = "free" )
-
-ggsave(paste0("images\\corplot_", trials[i], ".png"),
-     plot = corplot, units = "in", dpi = 300, width = 18, height = 10
-   )
-git
-correlations <- test %>% group_by(trait) %>% 
-  summarize(cor = cor(rep_1, rep_2, use = "complete.obs")) %>% 
-  arrange(desc(cor)) %>% 
-  mutate(trial = trials[i])
-
-if (i == 1) {
-    cor_table <- correlations
-  } else {
-    cor_table <- rbind.data.frame(cor_table, correlations)
-  }
-  i <- i + 1
-
+  blue_blup <-
+  obj$blues_blups %>%
+  select(trial, genotype, trait, BLUEs) %>%
+  spread(trait, value = BLUEs) %>%
+  select(trial, genotype, .data[[var]]) %>%
+  group_by(trial, genotype) %>%
+  pivot_wider(names_from = trial, values_from = .data[[var]]) %>%
+  right_join(BLUPs_table %>%
+    select(accession_name, .data[[var]]), by = c("genotype" = "accession_name")) %>%
+  arrange(is.na(across(where(is.numeric))), across(where(is.numeric))) %>%
+  mutate(across(where(is.numeric), round, 2))
+# remove all NA columns
+blue_blup <- blue_blup[, colSums(is.na(blue_blup)) < nrow(blue_blup)]
+master_data[[paste0("BLUP_BLUE_", var)]] <- blue_blup
 }
-
-cor_table %>% 
-  pivot_wider(names_from = "trial", values_from = "cor") %>% 
-  write.table("clipboard",  sep="\t", col.names = T, row.names = F, na = "")
-
 ```
 
-```{r}
-root_color <- my_dat %>% filter(trial_name == "202101DVGN6_ciat", 
-                  !check_test == "check") %>% 
-  select(accession_name, rep_number, any_of(trait_ideal)) %>% 
-  discard(~all(is.na(.) | . =="")) %>% 
-  pivot_longer(!c(accession_name, rep_number), names_to = "trait", values_to = "value") %>% 
-  #group_by(accession_name) %>%
-  pivot_wider(names_from = rep_number, values_from = value) %>% 
-  filter(trait == "root_skin_color1_3") 
+## Stability analysis
 
-colnames(root_color) <- c("accession_name", "trait", "rep_1", "rep_2")
-  root_color %>% 
-    summarize(cor = cor(rep_1, rep_2, use = "complete.obs"))
+```{r}
+variables <- trait_ideal
+for (var in variables) {
+stab <- met_results$stability %>% 
+  filter(trait == var) %>% 
+  arrange(superiority) %>% 
+        pivot_wider(names_from = "trait", values_from = c('predicted.value')) 
+# Change colname
+colnames(stab)[5] <- paste('BLUPs', colnames(stab)[5], sep = '_') 
+colnames(stab)[c(2, 3, 4)] <- paste(colnames(stab)[c(2, 3, 4)], var, sep = '_') 
+master_data[[paste0("stability_", var)]] <- stab
+}
+length(master_data) # elements number of list
+
+stab_values <- master_data[c(29:47)] %>% 
+  reduce(inner_join, by = "genotype") %>% 
+  select(!starts_with("BLUPs_")) %>% 
+  mutate(across(where(is.numeric), round, 2))
+# join all stability dataframes of a list
 ```
 
+## BLUE and BLUP data together
+
 ```{r}
-sandra <- read.delim("clipboard", header = T, check.names = F)
+BLUEs_BLUPs <- 
+  obj$blues_blups %>%
+  select(trait, genotype, trial, BLUEs, seBLUEs) %>%
+  pivot_wider(names_from = "trait", values_from = c("BLUEs", "seBLUEs")) %>%
+  pivot_wider(names_from = trial, values_from = c(
+    paste("BLUEs", trait_ideal, sep = "_"),
+    paste("seBLUEs", trait_ideal, sep = "_")
+  )) %>%
+  left_join(
+    met_results$overall_BLUPs %>%
+      select(!status) %>%
+      rename(
+        BLUPs = predicted.value,
+        seBLUPs = std.error
+      ) %>%
+      pivot_wider(names_from = "trait", values_from = c("BLUPs", "seBLUPs")),
+    by = "genotype"
+  ) %>%
+  arrange(desc(BLUPs_DM_gravity)) %>% 
+  arrange(is.na(across(where(is.numeric))), across(where(is.numeric))) %>%
+  mutate(across(where(is.numeric), round, 2))
+# remove all NA columns
+  BLUEs_BLUPs <- BLUEs_BLUPs[, colSums(is.na(BLUEs_BLUPs)) < nrow(BLUEs_BLUPs)]
+  
+# put all together stab_values with blues_blups
+BLUEs_BLUPs <- 
+  BLUEs_BLUPs %>% left_join(stab_values, by = 'genotype')  
+  
+    
+header_sort = vector()
+for (i in 1:length(trait_ideal)) {
+  
+  header_sort = c(header_sort, 
+                  grep(trait_ideal[i], sort(names(BLUEs_BLUPs)), value=TRUE) 
+  )
+  
+}
+BLUEs_BLUPs <- BLUEs_BLUPs %>%
+  select(genotype, all_of(header_sort), -starts_with("se")) 
+BLUEs_BLUPs <- BLUEs_BLUPs %>% 
+  relocate(colnames(BLUEs_BLUPs)[str_detect(colnames(BLUEs_BLUPs), "DM_gravity")], .after = genotype)
+master_data[["BLUEs_BLUPs_MET"]] = BLUEs_BLUPs
+```
 
-sandra <- sandra %>% 
-  filter(is.na(is_a_control)) %>% 
-  select(-c(is_a_control, plot_number, block_number)) %>% 
-  pivot_longer(!c(accession_name, rep_number), 
-               names_to = "root color visual rating 1-3|CO_334:0000221", values_to = "value") %>% 
-  #group_by(accession_name) %>%
-  pivot_wider(names_from = rep_number, values_from = value)
+## Genotypic correlation
 
-colnames(sandra) <- c("accession_name", "trait", "rep_1", "rep_2")
+```{r}
+colnames(BLUPs_table) <- c("Genotype", "Number of branches", "DM", 
+                                "DM yield", "Germination", "Height", "Height of 1st branch",
+                                "Plant type", "skin color", "Root type", "Vigor", "Yield")
+geno_cor <- gg_cor(
+  colours = c("red", "white", "blue"),
+  data = BLUPs_table[-5], # remove carotenoids
+  label_size = 4
+) + 
+  theme(
+  axis.text.y = element_text(size = 18),
+  axis.text.x = element_text(size = 18))
+ggsave(paste0("images\\geno_corr", trial_interest, "_", group, "_", Sys.Date(), ".png"),
+       plot = geno_cor, units = "in", dpi = 300, width = 12, height = 10)
+```
 
-sandra %>% 
-    summarize(cor = cor(rep_1, rep_2, use = "complete.obs"))
+## Save the master data results
+
+```{r}
+folder_output <- here::here("output//")
+meta_file_name <- paste0(folder_output, paste0("2022", trial_interest, "_master_results_", Sys.Date(), "_.xlsx" ))
+write.xlsx(master_data, file = meta_file_name)
 ```
