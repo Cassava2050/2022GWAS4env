@@ -314,41 +314,6 @@ plot_bxp
 #   )
 ```
 
-## Do some correlations between dry matter by oven and dry matter by gravity specific
-
-```{r}
-library(ggpubr)
-
-sp <- ggscatter(trial_tidy %>% 
-                  filter(!trial_name %in% c("202232DVGN6_momi")),
-                x = "DM_gravity", y = "DM_raw", add = "reg.line", 
-                fill = "trial_name", shape = 21,
-   add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
-   conf.int = TRUE, # Add confidence interval
-   ggtheme = theme_xiaofei())  +
-  theme(legend.position = "none") +
-   labs(x = "DM by gravity (%)", y = "DM by oven (%)") +
-   facet_wrap(~ trial_name) +
-   stat_cor(method = "pearson", label.x = 10, label.y = 50)
-sp
-```
-
-## If I bind both trials
-
-```{r}
-ggscatter(trial_tidy %>% 
-                  filter(!trial_name %in% c("202232DVGN6_momi")),
-                x = "DM_gravity", y = "DM_raw",
-          add = "reg.line", fill = "trial_name", shape = 21,  
-   add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
-   conf.int = TRUE, # Add confidence interval
-   ggtheme = theme_xiaofei())  +
-   labs(x = "DM by gravity (%)", y = "DM by oven (%)") +
-   stat_cor(method = "pearson", label.x = 10, label.y = 50)
-
-
-```
-
 # There are issues related with plot number need to be fixed.
 
 The trial with no fixed data is 202101DVGN6_ciat
@@ -570,6 +535,24 @@ correlation <- gg_cor(
 #    )
 ```
 
+# PCA Genotypic CIRCLE correlation (Phenotypic values)
+
+```{r}
+pacman::p_load(FactoMineR, factoextra)
+df <- trial_rm_sd %>% select(plot_name, all_of(trait_ideal)) %>% 
+  tibble::column_to_rownames("plot_name")
+
+pca <- PCA(df)
+
+var_plot <- fviz_pca_var(pca, col.var="contrib", repel = T, labelsize = 3) +
+  ggtitle(paste0("PCA_", trial_interest)) +
+  theme_xiaofei()
+
+
+# ggsave(paste0("images/PCA_var_", trial_interest, Sys.Date(), ".png"), plot = var_plot, units = "in", dpi = 300, width = 8, height = 8)
+```
+
+
 ## Check design experimental
 
 Agriutilities library
@@ -592,8 +575,7 @@ results <- check_design_met(
 
 shared <- plot(results, type = "connectivity")
 
-# ggsave(paste0('images\\shared_', trial_interest, "_", "_", Sys.Date(), ".png"),
-#        plot = shared, units = "in", dpi = 300, width = 8, height = 6)
+# ggsave(paste0('images\\shared_', trial_interest, "_", "_", Sys.Date(), ".png"), plot = shared, units = "in", dpi = 300, width = 8, height = 6)
   
 
 summary <- results$summ_traits 
@@ -649,19 +631,29 @@ single_h2 <- obj$resum_fitted_model[ ,1:3] %>%
   spread(trait, value = heritability) 
 
 master_data[["single_h2"]] <- single_h2
+
+single_h2 %>% 
+  write.table("clipboard", col.names = T, row.names = F, sep = "\t")
+
 ```
 
 ## Multi environmetal analysis
 
 ```{r}
 met_results <- met_analysis(obj, 
-                            vcov = "fa2",
+                            filter_traits = trait_ideal[!trait_ideal %in% c("branch_angle",
+                                                                            "lodging1_3_6mon",
+                                                                            "root_rot_number",
+                                                                            "thrips1_5",
+                                                                            "root_length1_3",
+                                                                            "root_peduncle1_3")],
                             progress = TRUE)
 # h2 gxe
 master_data[["h2_gxe"]] <- 
   met_results$heritability %>% 
   arrange(desc(h2)) %>%
   mutate(across(where(is.numeric), round, 2))
+
 master_data$h2_gxe %>%
   write.table("clipboard", col.names = T, row.names = F, sep = "\t")
 # BLUPs gxe
@@ -675,7 +667,44 @@ BLUPs_table <-
   ungroup() 
 #save the BLUPs data
 master_data[[paste0("BLUPs_", "gxe")]] <- BLUPs_table
+
 ```
+
+## Genotypic correlation (BLUP values)
+
+```{r}
+# colnames(BLUPs_table) <- c("Genotype", "Number of branches", "DM", 
+#                                 "DM yield", "Germination", "Height", "Height of 1st branch",
+#                                 "Plant type", "skin color", "Root type", "Vigor", "Yield")
+geno_cor <- gg_cor(
+  colours = c("red", "white", "blue"),
+  data = BLUPs_table, # remove carotenoids
+  label_size = 1.8
+) 
+
+# ggsave(paste0("images\\geno_corr", trial_interest, "_", Sys.Date(), ".png"),
+#        plot = geno_cor, units = "in", dpi = 300, width = 12, height = 8)
+```
+
+# PCA Genotypic CIRCLE correlation (BLUP values)
+
+```{r}
+pacman::p_load(FactoMineR, factoextra)
+
+dg <- BLUPs_table %>%
+  tibble::column_to_rownames("accession_name")
+
+pca <- PCA(dg)
+
+var_plot <- fviz_pca_var(pca, col.var="contrib", repel = T, labelsize = 3) +
+  ggtitle(paste("PCA", trial_interest, "BLUP_values", sep = "_")) +
+  theme_xiaofei()
+
+
+# ggsave(paste0("images/PCA_var_BLUP", trial_interest, Sys.Date(), ".png"), plot = var_plot, units = "in", dpi = 300, width = 8, height = 8)
+```
+
+
 
 ## Genotypic Correlation: Locations
 
@@ -690,6 +719,14 @@ corrplot(met_results$VCOV$yield_ha$CORR, method="color",
          )
 #Dry matter
 corrplot(met_results$VCOV$DM_gravity$CORR, method="color",  
+         type="lower", order="hclust", 
+         addCoef.col = "black", # Add coefficient of correlation
+         tl.col="black",
+         tl.cex = 0.8,#Text label color and rotation
+         diag=T 
+         )
+#Dry matter raw
+corrplot(met_results$VCOV$DM_raw$CORR, method="color",  
          type="lower", order="hclust", 
          addCoef.col = "black", # Add coefficient of correlation
          tl.col="black",
@@ -736,7 +773,12 @@ corrplot(met_results$VCOV$HCN_linamarase_10mon$CORR, method="color",
 ## Save the BLUEs or raw data across the trials
 
 ```{r}
-variables <- trait_ideal
+variables <- trait_ideal[!trait_ideal %in% c("branch_angle", 
+                                             "lodging1_3_6mon",
+                                             "root_rot_number",
+                                             "thrips1_5",
+                                             "root_length1_3",
+                                             "root_peduncle1_3")]
 for (var in variables) {
   
   blue_blup <-
@@ -759,7 +801,7 @@ master_data[[paste0("BLUP_BLUE_", var)]] <- blue_blup
 ## Stability analysis
 
 ```{r}
-variables <- trait_ideal
+
 for (var in variables) {
 stab <- met_results$stability %>% 
   filter(trait == var) %>% 
@@ -770,13 +812,18 @@ colnames(stab)[5] <- paste('BLUPs', colnames(stab)[5], sep = '_')
 colnames(stab)[c(2, 3, 4)] <- paste(colnames(stab)[c(2, 3, 4)], var, sep = '_') 
 master_data[[paste0("stability_", var)]] <- stab
 }
+
+
 length(master_data) # elements number of list
 
-stab_values <- master_data[c(29:47)] %>% 
+
+stab_values <- master_data[c(40:69)] %>% # select only stability elements
   reduce(inner_join, by = "genotype") %>% 
   select(!starts_with("BLUPs_")) %>% 
   mutate(across(where(is.numeric), round, 2))
 # join all stability dataframes of a list
+
+
 ```
 
 ## BLUE and BLUP data together
@@ -826,28 +873,62 @@ BLUEs_BLUPs <- BLUEs_BLUPs %>%
 master_data[["BLUEs_BLUPs_MET"]] = BLUEs_BLUPs
 ```
 
-## Genotypic correlation
-
-```{r}
-colnames(BLUPs_table) <- c("Genotype", "Number of branches", "DM", 
-                                "DM yield", "Germination", "Height", "Height of 1st branch",
-                                "Plant type", "skin color", "Root type", "Vigor", "Yield")
-geno_cor <- gg_cor(
-  colours = c("red", "white", "blue"),
-  data = BLUPs_table[-5], # remove carotenoids
-  label_size = 4
-) + 
-  theme(
-  axis.text.y = element_text(size = 18),
-  axis.text.x = element_text(size = 18))
-ggsave(paste0("images\\geno_corr", trial_interest, "_", group, "_", Sys.Date(), ".png"),
-       plot = geno_cor, units = "in", dpi = 300, width = 12, height = 10)
-```
-
 ## Save the master data results
 
 ```{r}
 folder_output <- here::here("output//")
 meta_file_name <- paste0(folder_output, paste0("2022", trial_interest, "_master_results_", Sys.Date(), "_.xlsx" ))
+
+names(master_data)[56] <- "stability_root_commercial"
+names(master_data)[26] <- "BLUP_BLUE_root_commercial"
+names(master_data)[34] <- "BLUP_BLUE_germ_number_plot"
+names(master_data)[64] <- "stability_germ_number_plot"
 write.xlsx(master_data, file = meta_file_name)
+```
+
+
+## Do some correlations between dry matter by oven and dry matter by gravity specific
+
+```{r}
+library(ggpubr)
+
+blue_blup <- obj$blues_blups %>% 
+                  select(-c(seBLUEs, seBLUPs, wt)) %>% 
+      pivot_wider(names_from = "trait", values_from = c("BLUEs", "BLUPs")) %>% 
+  select(trial, BLUPs_DM_gravity, BLUPs_DM_raw)
+
+sp <- ggscatter(blue_blup %>% filter(!trial %in% c("202232DVGN6_momi")),
+                x = "BLUPs_DM_gravity", y = "BLUPs_DM_raw", add = "reg.line", 
+                fill = "trial", shape = 21,
+   add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
+   conf.int = TRUE, # Add confidence interval
+   ggtheme = theme_xiaofei())  +
+  theme(legend.position = "none") +
+   labs(x = "DM by gravity (%)", y = "DM by oven (%)") +
+   facet_wrap(~ trial) +
+   stat_cor(method = "pearson", label.x = 10, label.y = 50)
+sp
+
+# ggsave(paste0("images/DM_BLUP_value_", trial_interest, Sys.Date(), ".png"), 
+# plot = sp, units = "in", dpi = 300, width = 8, height = 4)
+```
+
+## If I bind both trials
+
+```{r}
+st <- ggscatter(blue_blup %>% 
+                  filter(!trial %in% c("202232DVGN6_momi")),
+                x = "BLUPs_DM_gravity", y = "BLUPs_DM_raw",
+          add = "reg.line", fill = "trial", shape = 21,  
+   add.params = list(color = "blue", fill = "lightgray"), # Customize reg. line
+   conf.int = TRUE, # Add confidence interval
+   ggtheme = theme_xiaofei())  +
+   labs(x = "DM by gravity (%)", y = "DM by oven (%)") +
+   stat_cor(method = "pearson", label.x = 20, label.y = 50) +
+  xlim(c(20, 45))
+
+st
+
+ggsave(paste0("images/DM_BLUP_value_overall", trial_interest, Sys.Date(), ".png"),
+plot = st, units = "in", dpi = 300, width = 6, height = 4)
 ```
