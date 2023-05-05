@@ -682,8 +682,8 @@ geno_cor <- gg_cor(
   label_size = 1.8
 ) 
 
-ggsave(paste0("images\\geno_corr", trial_interest, "_", Sys.Date(), ".png"),
-       plot = geno_cor, units = "in", dpi = 300, width = 12, height = 8)
+# ggsave(paste0("images\\geno_corr", trial_interest, "_", Sys.Date(), ".png"),
+#        plot = geno_cor, units = "in", dpi = 300, width = 12, height = 8)
 ```
 
 # PCA Genotypic CIRCLE correlation (BLUP values)
