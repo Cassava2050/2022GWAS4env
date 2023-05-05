@@ -27,7 +27,7 @@ pacman::p_load(tidyverse,
                statgenGxE, 
                openxlsx, 
                agriutilities, 
-               asreml, 
+               #asreml, 
                SpATS, 
                ggsci,
                lubridate,
@@ -412,7 +412,7 @@ sel_file = list_file[str_detect(list_file, "_tidy_data4analysis_") &
                                   paste(year_interest, trial_interest, sep=""))]
 sel_file
 # the data we will use
-sel_file_use = sel_file[3]
+sel_file_use = sel_file[4]
 
 trial1_tidy = read.csv(here::here("output", sel_file_use), header=TRUE,
                         stringsAsFactors = FALSE,
@@ -423,7 +423,12 @@ if(trial_set_number == 1){
 }
 ```
 
-```{r}
+```{r eval=FALSE}
+
+trial_tidy_all %>% 
+  select(plot_name, accession_name, DM_raw, DM_gravity, DM_nirs) %>% 
+  write.csv("dm_data.csv", row.names = F)
+
 if(FALSE) { 
 # save quality lab data fixed
 master_data <- list()
@@ -642,11 +647,7 @@ single_h2 %>%
 ```{r}
 met_results <- met_analysis(obj, 
                             filter_traits = trait_ideal[!trait_ideal %in% c("branch_angle",
-                                                                            "lodging1_3_6mon",
-                                                                            "root_rot_number",
-                                                                            "thrips1_5",
-                                                                            "root_length1_3",
-                                                                            "root_peduncle1_3")],
+                                                                            "lodging1_3_6mon")],
                             progress = TRUE)
 # h2 gxe
 master_data[["h2_gxe"]] <- 
@@ -667,7 +668,6 @@ BLUPs_table <-
   ungroup() 
 #save the BLUPs data
 master_data[[paste0("BLUPs_", "gxe")]] <- BLUPs_table
-
 ```
 
 ## Genotypic correlation (BLUP values)
@@ -682,8 +682,8 @@ geno_cor <- gg_cor(
   label_size = 1.8
 ) 
 
-# ggsave(paste0("images\\geno_corr", trial_interest, "_", Sys.Date(), ".png"),
-#        plot = geno_cor, units = "in", dpi = 300, width = 12, height = 8)
+ggsave(paste0("images\\geno_corr", trial_interest, "_", Sys.Date(), ".png"),
+       plot = geno_cor, units = "in", dpi = 300, width = 12, height = 8)
 ```
 
 # PCA Genotypic CIRCLE correlation (BLUP values)
@@ -770,28 +770,30 @@ corrplot(met_results$VCOV$HCN_linamarase_10mon$CORR, method="color",
          )
 ```
 
+
+
+
 ## Save the BLUEs or raw data across the trials
 
 ```{r}
 variables <- trait_ideal[!trait_ideal %in% c("branch_angle", 
-                                             "lodging1_3_6mon",
-                                             "root_rot_number",
-                                             "thrips1_5",
-                                             "root_length1_3",
-                                             "root_peduncle1_3")]
+                                             "lodging1_3_6mon"
+                                             )]
 for (var in variables) {
-  
+
+
   blue_blup <-
   obj$blues_blups %>%
   select(trial, genotype, trait, BLUEs) %>%
   spread(trait, value = BLUEs) %>%
-  select(trial, genotype, .data[[var]]) %>%
+  select(trial, genotype, all_of(var)) %>%
   group_by(trial, genotype) %>%
-  pivot_wider(names_from = trial, values_from = .data[[var]]) %>%
+  pivot_wider(names_from = trial, values_from = all_of(var)) %>%
   right_join(BLUPs_table %>%
-    select(accession_name, .data[[var]]), by = c("genotype" = "accession_name")) %>%
+    select(accession_name, all_of(var)), by = c("genotype" = "accession_name")) %>%
   arrange(is.na(across(where(is.numeric))), across(where(is.numeric))) %>%
   mutate(across(where(is.numeric), round, 2))
+  
 # remove all NA columns
 blue_blup <- blue_blup[, colSums(is.na(blue_blup)) < nrow(blue_blup)]
 master_data[[paste0("BLUP_BLUE_", var)]] <- blue_blup
@@ -803,10 +805,13 @@ master_data[[paste0("BLUP_BLUE_", var)]] <- blue_blup
 ```{r}
 
 for (var in variables) {
+  
 stab <- met_results$stability %>% 
   filter(trait == var) %>% 
   arrange(superiority) %>% 
         pivot_wider(names_from = "trait", values_from = c('predicted.value')) 
+
+
 # Change colname
 colnames(stab)[5] <- paste('BLUPs', colnames(stab)[5], sep = '_') 
 colnames(stab)[c(2, 3, 4)] <- paste(colnames(stab)[c(2, 3, 4)], var, sep = '_') 
@@ -814,15 +819,15 @@ master_data[[paste0("stability_", var)]] <- stab
 }
 
 
-length(master_data) # elements number of list
+# look at names of master_data that starts with "stability"
+ind <- grep("^stability_", names(master_data))
 
 
-stab_values <- master_data[c(40:69)] %>% # select only stability elements
+# select elements that satisfy the condition
+stab_values <- master_data[ind] %>% 
   reduce(inner_join, by = "genotype") %>% 
   select(!starts_with("BLUPs_")) %>% 
   mutate(across(where(is.numeric), round, 2))
-# join all stability dataframes of a list
-
 
 ```
 
@@ -832,10 +837,11 @@ stab_values <- master_data[c(40:69)] %>% # select only stability elements
 BLUEs_BLUPs <- 
   obj$blues_blups %>%
   select(trait, genotype, trial, BLUEs, seBLUEs) %>%
+  filter(trait %in% variables) %>% 
   pivot_wider(names_from = "trait", values_from = c("BLUEs", "seBLUEs")) %>%
   pivot_wider(names_from = trial, values_from = c(
-    paste("BLUEs", trait_ideal, sep = "_"),
-    paste("seBLUEs", trait_ideal, sep = "_")
+    paste("BLUEs", variables, sep = "_"),
+    paste("seBLUEs", variables, sep = "_")
   )) %>%
   left_join(
     met_results$overall_BLUPs %>%
@@ -859,10 +865,10 @@ BLUEs_BLUPs <-
   
     
 header_sort = vector()
-for (i in 1:length(trait_ideal)) {
+for (i in 1:length(variables)) {
   
   header_sort = c(header_sort, 
-                  grep(trait_ideal[i], sort(names(BLUEs_BLUPs)), value=TRUE) 
+                  grep(variables[i], sort(names(BLUEs_BLUPs)), value=TRUE) 
   )
   
 }
@@ -879,10 +885,12 @@ master_data[["BLUEs_BLUPs_MET"]] = BLUEs_BLUPs
 folder_output <- here::here("output//")
 meta_file_name <- paste0(folder_output, paste0("2022", trial_interest, "_master_results_", Sys.Date(), "_.xlsx" ))
 
-names(master_data)[56] <- "stability_root_commercial"
+
 names(master_data)[26] <- "BLUP_BLUE_root_commercial"
-names(master_data)[34] <- "BLUP_BLUE_germ_number_plot"
-names(master_data)[64] <- "stability_germ_number_plot"
+names(master_data)[36] <- "BLUP_BLUE_germ_number_plot"
+names(master_data)[60] <- "stability_root_commercial"
+names(master_data)[70] <- "stability_germ_number_plot"
+
 write.xlsx(master_data, file = meta_file_name)
 ```
 
